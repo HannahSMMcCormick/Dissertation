@@ -5,8 +5,7 @@ from mediapipe.tasks.python import vision
 import numpy as np
 import cv2 
 import os
-import json
-from config import MEDIAPIPE_PATH, EXTERNAL_PATH, INTERIM_PATH, hand_landmarker_task_PATH
+from config import EXTERNAL_PATH, INTERIM_PATH, hand_landmarker_task_PATH
 
 #MediaPipe Classes
 mp_hands = mp.tasks.vision.HandLandmarksConnections #Joints and fingers
@@ -53,60 +52,68 @@ def draw_landmarks_on_image(rgb_image, detection_result):
   return annotated_image
 
 def HandObject():
+  
+  #Create HandObject
   base_options = python.BaseOptions(model_asset_path=str(hand_landmarker_task_PATH))
   options = vision.HandLandmarkerOptions(base_options=base_options,num_hands=2)
   detector = vision.HandLandmarker.create_from_options(options)
   
-  for file, filename in enumerate(os.listdir(EXTERNAL_PATH)):
+  #Iterate through all sign videos
+  for _, filename in enumerate(os.listdir(EXTERNAL_PATH)):
     
-    input_file = os.path.join(EXTERNAL_PATH, filename)
     
-    if not os.path.isfile(input_file):
+    input_file = os.path.join(EXTERNAL_PATH, filename) #Input file path
+    
+    if not os.path.isfile(input_file): #If file doesn't exist at oath, skip
       
       continue
     
-    if not filename.lower().endswith(".mp4"):
+    if not filename.lower().endswith(".mp4"): #If file isn't video, skip
       continue
     
-    videoRead =  cv2.VideoCapture(input_file)
+    videoRead =  cv2.VideoCapture(input_file) #Read video
     
-    if not videoRead.isOpened():
+    if not videoRead.isOpened(): #If video can't open the skip
       print(f"Skipping (cannot open): {input_file}")
       continue
     
-    fps = videoRead.get(cv2.CAP_PROP_FPS) or 30
-    width = int(videoRead.get(cv2.CAP_PROP_FRAME_WIDTH))
-    height = int(videoRead.get(cv2.CAP_PROP_FRAME_HEIGHT))
+    fps = videoRead.get(cv2.CAP_PROP_FPS) or 30 #Get frames per second from video or set it to 30
+    width = int(videoRead.get(cv2.CAP_PROP_FRAME_WIDTH)) #Get Width of video
+    height = int(videoRead.get(cv2.CAP_PROP_FRAME_HEIGHT)) #Get Height of video
 
-    base_name = os.path.splitext(os.path.basename(filename))[0]
+    base_name = os.path.splitext(os.path.basename(filename))[0] #Take basename(Sign in video) to use for output video
     
     output_path = os.path.join(INTERIM_PATH, f"{base_name}_annotated.mp4") #Create Output dir
     
-    fourcc = cv2.VideoWriter_fourcc(*"mp4v")
+    fourcc = cv2.VideoWriter_fourcc(*"mp4v") #Compress code for output
     
-    writer = cv2.VideoWriter(output_path, fourcc, fps, (width, height))
+    writer = cv2.VideoWriter(output_path, fourcc, fps, (width, height)) #Write Output video
+
 
     while True:
       
-      ret, frame_bgr = videoRead.read()
+      ret, frame_bgr = videoRead.read() #Does frame exist and if so save it
 
+      #If reached end of video the break
       if not ret:
         break
 
-      frame_rgb = cv2.cvtColor(frame_bgr, cv2.COLOR_BGR2RGB)
-      mp_image = mp.Image(image_format=mp.ImageFormat.SRGB, data=frame_rgb)
-      
-      detection_result = detector.detect(mp_image)
-      
-      annotated_rgb = draw_landmarks_on_image(frame_rgb, detection_result)
-      annotated_bgr = cv2.cvtColor(annotated_rgb, cv2.COLOR_RGB2BGR)
 
-      writer.write(annotated_bgr)
+      frame_rgb = cv2.cvtColor(frame_bgr, cv2.COLOR_BGR2RGB) #Convert video from bgr to rgb
+      mp_image = mp.Image(image_format=mp.ImageFormat.SRGB, data=frame_rgb) #Makes numpy array compatible with mediapipe
       
+      detection_result = detector.detect(mp_image) #Detects hand landmarks
+      
+      annotated_rgb = draw_landmarks_on_image(frame_rgb, detection_result) #Use the function to draw the landmarks on
+      annotated_bgr = cv2.cvtColor(annotated_rgb, cv2.COLOR_RGB2BGR) #convert back to bgr
 
+      writer.write(annotated_bgr)#Makes new video
+      
+    #Closes everything
     videoRead.release()
     writer.release()
 
+#Run program
 if __name__ == "__main__":
     HandObject()
 
