@@ -1,11 +1,13 @@
-#@markdown We implemented some functions to visualize the hand landmark detection results. <br/> Run the following cell to activate the functions.
 import mediapipe as mp
 from mediapipe.tasks import python
 from mediapipe.tasks.python import vision
+from mediapipe.tasks.python.vision import drawing_utils
+from mediapipe.tasks.python.vision import drawing_styles
 import numpy as np
+import matplotlib as plt
 import cv2 
 import os
-from config import EXTERNAL_PATH, INTERIM_PATH, hand_landmarker_task_PATH
+from config import EXTERNAL_PATH, INTERIM_PATH, hand_landmarker_task_PATH, Face_Landmarker_task_PATH
 
 #MediaPipe Classes
 mp_hands = mp.tasks.vision.HandLandmarksConnections #Joints and fingers
@@ -19,10 +21,16 @@ HANDEDNESS_TEXT_COLOR = (88, 205, 54)  #Colour
 
 
 #Takes image and annotates it 
-def draw_landmarks_on_image(rgb_image, detection_result):
-  hand_landmarks_list = detection_result.hand_landmarks #List of hands
-  handedness_list = detection_result.handedness #Left or Right
+def draw_landmarks_on_image(rgb_image, hand_detection_result, face_detection_result):
+  
+  #Hand Landmarks
+  hand_landmarks_list = hand_detection_result.hand_landmarks #List of hands
+  handedness_list = hand_detection_result.handedness #Left or Right
   annotated_image = np.copy(rgb_image) #copy of image 
+
+  # Face Landmarks
+  face_landmarks_list = face_detection_result.face_landmarks 
+  
 
   # Loop through the detected hands to visualize.
   for idx in range(len(hand_landmarks_list)):
@@ -49,7 +57,43 @@ def draw_landmarks_on_image(rgb_image, detection_result):
                 (text_x, text_y), cv2.FONT_HERSHEY_DUPLEX,
                 FONT_SIZE, HANDEDNESS_TEXT_COLOR, FONT_THICKNESS, cv2.LINE_AA)
 
+
+  for idx in range(len(face_landmarks_list)):
+    
+    face_landmarks = face_landmarks_list[idx]
+    
+    
+    drawing_utils.draw_landmarks(
+        image=annotated_image,
+        landmark_list=face_landmarks,
+        connections=vision.FaceLandmarksConnections.FACE_LANDMARKS_TESSELATION,
+        landmark_drawing_spec=None,
+        connection_drawing_spec=drawing_styles.get_default_face_mesh_tesselation_style())
+    drawing_utils.draw_landmarks(
+        image=annotated_image,
+        landmark_list=face_landmarks,
+        connections=vision.FaceLandmarksConnections.FACE_LANDMARKS_CONTOURS,
+        landmark_drawing_spec=None,
+        connection_drawing_spec=drawing_styles.get_default_face_mesh_contours_style())
+    drawing_utils.draw_landmarks(
+        image=annotated_image,
+        landmark_list=face_landmarks,
+        connections=vision.FaceLandmarksConnections.FACE_LANDMARKS_LEFT_IRIS,
+          landmark_drawing_spec=None,
+          connection_drawing_spec=drawing_styles.get_default_face_mesh_iris_connections_style())
+    drawing_utils.draw_landmarks(
+        image=annotated_image,
+        landmark_list=face_landmarks,
+        connections=vision.FaceLandmarksConnections.FACE_LANDMARKS_RIGHT_IRIS,
+          landmark_drawing_spec=None,
+          connection_drawing_spec=drawing_styles.get_default_face_mesh_iris_connections_style())
+    
+    
+  
+  
   return annotated_image
+
+
 
 def HandObject():
   
@@ -58,7 +102,23 @@ def HandObject():
   options = vision.HandLandmarkerOptions(base_options=base_options,num_hands=2)
   detector = vision.HandLandmarker.create_from_options(options)
   
-  #Iterate through all sign videos
+  return detector
+
+def FaceObject():
+
+  base_options = python.BaseOptions(model_asset_path= str(Face_Landmarker_task_PATH))
+  options = vision.FaceLandmarkerOptions(base_options=base_options,
+                                       output_face_blendshapes=True,
+                                       output_facial_transformation_matrixes=True,
+                                       num_faces=1)
+  detector = vision.FaceLandmarker.create_from_options(options)
+  
+  
+  return detector
+  
+
+def get_video():
+  
   for _, filename in enumerate(os.listdir(EXTERNAL_PATH)):
     
     
@@ -77,7 +137,7 @@ def HandObject():
       print(f"Skipping (cannot open): {input_file}")
       continue
     
-    fps = videoRead.get(cv2.CAP_PROP_FPS) or 30 #Get frames per second from video or set it to 30
+    fps = videoRead.get(cv2.CAP_PROP_FPS) #Get frames per second from video or set it to 30
     width = int(videoRead.get(cv2.CAP_PROP_FRAME_WIDTH)) #Get Width of video
     height = int(videoRead.get(cv2.CAP_PROP_FRAME_HEIGHT)) #Get Height of video
 
@@ -89,7 +149,11 @@ def HandObject():
     
     writer = cv2.VideoWriter(output_path, fourcc, fps, (width, height)) #Write Output video
 
-
+    hand_landmark_detector = HandObject()
+    
+    face_landmark_detector = FaceObject()
+    
+    
     while True:
       
       ret, frame_bgr = videoRead.read() #Does frame exist and if so save it
@@ -102,20 +166,61 @@ def HandObject():
       frame_rgb = cv2.cvtColor(frame_bgr, cv2.COLOR_BGR2RGB) #Convert video from bgr to rgb
       mp_image = mp.Image(image_format=mp.ImageFormat.SRGB, data=frame_rgb) #Makes numpy array compatible with mediapipe
       
-      detection_result = detector.detect(mp_image) #Detects hand landmarks
+      hand_detection_result = hand_landmark_detector.detect(mp_image) #Detects hand landmarks
+      face_detection_result = face_landmark_detector.detect(mp_image) #Detects face landmarks
       
-      annotated_rgb = draw_landmarks_on_image(frame_rgb, detection_result) #Use the function to draw the landmarks on
+      
+      
+      
+      
+      annotated_rgb = draw_landmarks_on_image(frame_rgb, hand_detection_result, face_detection_result) #Use the function to draw the landmarks on
+      
+      
       annotated_bgr = cv2.cvtColor(annotated_rgb, cv2.COLOR_RGB2BGR) #convert back to bgr
+      
+      
 
       writer.write(annotated_bgr)#Makes new video
+      
       
     #Closes everything
     videoRead.release()
     writer.release()
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  """
+  change structure 
+  One function to loop videos + get specs
+  That function calls head object and face object
+  then first function calls draw function
+  
+  -Done
+  """
+
+
+
 #Run program
 if __name__ == "__main__":
-    HandObject()
+    get_video()
 
 
 
