@@ -4,10 +4,20 @@ from mediapipe.tasks.python import vision
 from mediapipe.tasks.python.vision import drawing_utils
 from mediapipe.tasks.python.vision import drawing_styles
 import numpy as np
-import matplotlib as plt
+import matplotlib.pyplot as plt
 import cv2 
 import os
 from config import EXTERNAL_PATH, INTERIM_PATH, hand_landmarker_task_PATH, Face_Landmarker_task_PATH, pose_landmarker_task_PATH
+import json
+
+HAND_LANDMARK_NAMES = [
+    "WRIST",
+    "THUMB_CMC","THUMB_MCP","THUMB_IP","THUMB_TIP",
+    "INDEX_FINGER_MCP","INDEX_FINGER_PIP","INDEX_FINGER_DIP","INDEX_FINGER_TIP",
+    "MIDDLE_FINGER_MCP","MIDDLE_FINGER_PIP","MIDDLE_FINGER_DIP","MIDDLE_FINGER_TIP",
+    "RING_FINGER_MCP","RING_FINGER_PIP","RING_FINGER_DIP","RING_FINGER_TIP",
+    "PINKY_MCP","PINKY_PIP","PINKY_DIP","PINKY_TIP"
+]
 
 #MediaPipe Classes
 mp_hands = mp.tasks.vision.HandLandmarksConnections #Joints and fingers
@@ -26,7 +36,7 @@ def draw_landmarks_on_image(rgb_image, hand_detection_result, face_detection_res
   #Hand Landmarks
   hand_landmarks_list = hand_detection_result.hand_landmarks #List of hands
   handedness_list = hand_detection_result.handedness #Left or Right
-  annotated_image = np.copy(rgb_image) #copy of image 
+  
 
   # Face Landmarks
   face_landmarks_list = face_detection_result.face_landmarks 
@@ -36,6 +46,7 @@ def draw_landmarks_on_image(rgb_image, hand_detection_result, face_detection_res
   pose_landmark_style = drawing_styles.get_default_pose_landmarks_style()
   pose_connection_style = drawing_utils.DrawingSpec(color=(0, 255, 0), thickness=2)
   
+  annotated_image = np.copy(rgb_image) #copy of image 
   
   # Loop through the detected hands to visualize.
   for idx in range(len(hand_landmarks_list)):
@@ -61,7 +72,6 @@ def draw_landmarks_on_image(rgb_image, hand_detection_result, face_detection_res
     cv2.putText(annotated_image, f"{handedness[0].category_name}",
                 (text_x, text_y), cv2.FONT_HERSHEY_DUPLEX,
                 FONT_SIZE, HANDEDNESS_TEXT_COLOR, FONT_THICKNESS, cv2.LINE_AA)
-
 
   for idx in range(len(face_landmarks_list)):
     
@@ -100,6 +110,8 @@ def draw_landmarks_on_image(rgb_image, hand_detection_result, face_detection_res
         connections=vision.PoseLandmarksConnections.POSE_LANDMARKS,
         landmark_drawing_spec=pose_landmark_style,
         connection_drawing_spec=pose_connection_style)
+    
+  
 
   return annotated_image
 
@@ -138,6 +150,7 @@ def poseObject():
 
 def get_video():
   
+  #Loop through all videos
   for _, filename in enumerate(os.listdir(EXTERNAL_PATH)):
     
     
@@ -157,6 +170,7 @@ def get_video():
       continue
     
     fps = videoRead.get(cv2.CAP_PROP_FPS) #Get frames per second from video or set it to 30
+    
     width = int(videoRead.get(cv2.CAP_PROP_FRAME_WIDTH)) #Get Width of video
     height = int(videoRead.get(cv2.CAP_PROP_FRAME_HEIGHT)) #Get Height of video
 
@@ -168,12 +182,20 @@ def get_video():
     
     writer = cv2.VideoWriter(output_path, fourcc, fps, (width, height)) #Write Output video
 
+    #Json format for extracted points (so far only for hand landmarks, will add face and pose later)
+    json_output = {
+    "video_path": input_file,
+    "fps": fps,
+    "frames": []
+    }
+    
     hand_landmark_detector = HandObject()
     
     face_landmark_detector = FaceObject()
     
     pose_landmark_detector = poseObject()
     
+    frame_idx = 0
     
     while True:
       
@@ -191,51 +213,82 @@ def get_video():
       face_detection_result = face_landmark_detector.detect(mp_image) #Detects face landmarks
       pose_detection_result = pose_landmark_detector.detect(mp_image)
       
-      
-      
-      
       annotated_rgb = draw_landmarks_on_image(frame_rgb, hand_detection_result, face_detection_result, pose_detection_result) #Use the function to draw the landmarks on
-      
-      
       annotated_bgr = cv2.cvtColor(annotated_rgb, cv2.COLOR_RGB2BGR) #convert back to bgr
-      
-      
-
+  
       writer.write(annotated_bgr)#Makes new video
       
+      #extract points to put in JSON
+      json_output["frames"].append(
+        Extract_points(hand_detection_result, frame_idx, fps)
+      )
+
+      #Increment frame
+      frame_idx += 1
       
-    #Closes everything
+      
+    #Currentlt putting JSON in interim folder with videos, might change later
+    json_path = os.path.join(INTERIM_PATH, f"{base_name}_hands.json")
+    with open(json_path, "w", encoding="utf-8") as f:
+      json.dump(json_output, f, indent=2)
+
+    print(f"Saved hand landmarks JSON: {json_path}")
+          #Closes everything
     videoRead.release()
     writer.release()
+      
+def Extract_points(hand_detection_result, frame_idx, fps):
+  
+  #Json of frame index, when that frame is and which hand the points are coming from
+    frame_record = {
+        "frame_index": frame_idx,
+        "time_sec": frame_idx / fps,
+        "hands": []
+    }
+      
+    
+    hand_landmarks_list = hand_detection_result.hand_landmarks or [] # Does hands exist
+    handedness_list = hand_detection_result.handedness or [] # Does handidness exist
+    
+    
+    for h_i, hand_landmarks in enumerate(hand_landmarks_list):
+        # handedness for this hand 
+        label = None
+        score = None
+        if h_i < len(handedness_list) and handedness_list[h_i]:
+            
+            catagories = handedness_list[h_i][0]  #list of catagories
+            label = catagories.category_name #left/right
+            score = float(catagories.score) #Models confidence in choosing left/right hand correctly
 
+        points = [] #landmarks
+        for lm_i, lm in enumerate(hand_landmarks):
+            points.append({
+                "id": lm_i,
+                "name": HAND_LANDMARK_NAMES[lm_i],
+                "x": float(lm.x),
+                "y": float(lm.y),
+                "z": float(lm.z),
+            })
 
+        # add hand to frame  
+        frame_record["hands"].append({
+            "hand_index": h_i,
+            "handedness": label,
+            "handedness_score": score,
+            "landmarks": points
+        })
 
+    return frame_record
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-  """
+"""
   change structure 
   One function to loop videos + get specs
   That function calls head object and face object
   then first function calls draw function
   
   -Done
-  """
+"""
 
 
 
