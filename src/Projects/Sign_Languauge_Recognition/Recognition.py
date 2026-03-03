@@ -213,6 +213,7 @@ def get_video():
       face_detection_result = face_landmark_detector.detect(mp_image) #Detects face landmarks
       pose_detection_result = pose_landmark_detector.detect(mp_image)
       
+      
       annotated_rgb = draw_landmarks_on_image(frame_rgb, hand_detection_result, face_detection_result, pose_detection_result) #Use the function to draw the landmarks on
       annotated_bgr = cv2.cvtColor(annotated_rgb, cv2.COLOR_RGB2BGR) #convert back to bgr
   
