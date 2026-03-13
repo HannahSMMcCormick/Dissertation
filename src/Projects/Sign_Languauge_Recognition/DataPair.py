@@ -8,7 +8,7 @@ from urllib.parse import urljoin
 import requests
 from bs4 import BeautifulSoup
 
-from config import EXTERNAL_PATH
+from config import EXTERNAL_PATH, INTERIM_PATH
 
 #Main url of Dictionary 
 CONCEPT_INDEX_URL = (
@@ -61,7 +61,7 @@ def build_concept_map(session: requests.Session) -> Dict[str, str]:
         if not text:
             continue
 
-        #Makes sure its the right linnk
+        #Makes sure its the right link
         if href.endswith(".html") and (href.startswith("cs/") or "/cs/" in href):
             key = norm_sign(text) #Correcting sign names from my dumb spelling
             concept_map[key] = urljoin(CONCEPT_INDEX_URL, href) #makes sure the link isnt broken, website had weird urls
@@ -117,13 +117,22 @@ def make_dataset():
     print(f"Found {len(concept_map)} concept links.")
 
     videos = []
+    hand_landmarks = []
+    
     filenames = sorted(os.listdir(EXTERNAL_PATH))
+    InterimFilesnames = sorted(os.listdir(INTERIM_PATH))
 
     for idx, filename in enumerate(filenames):
         if not filename.lower().endswith(".mp4"):
             continue
 
         sign_raw = filename[:-4] 
+        
+        for id, Jsonfilename in enumerate(InterimFilesnames):
+            if Jsonfilename.lower().endswith(".json"):
+                
+                hand_landmarks.append(Jsonfilename)
+            
         sign_key = norm_sign(sign_raw)#Get speeling right
 
         concept_url = concept_map.get(sign_key)
@@ -156,6 +165,7 @@ def make_dataset():
                 "filepath": os.path.join(EXTERNAL_PATH, filename),
                 "HamNoSys": hamnosys,
                 "concept_url": concept_url or "",
+                "HandLandmark": os.path.join(INTERIM_PATH,hand_landmarks[idx])
             }
         )
 
