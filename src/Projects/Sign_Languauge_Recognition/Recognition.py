@@ -19,6 +19,27 @@ HAND_LANDMARK_NAMES = [
     "PINKY_MCP","PINKY_PIP","PINKY_DIP","PINKY_TIP"
 ]
 
+POSE_LANDMARK_NAMES = [
+    "NOSE",
+    "LEFT_EYE_INNER","LEFT_EYE","LEFT_EYE_OUTER",
+    "RIGHT_EYE_INNER","RIGHT_EYE","RIGHT_EYE_OUTER",
+    "LEFT_EAR","RIGHT_EAR",
+    "MOUTH_LEFT","MOUTH_RIGHT",
+    "LEFT_SHOULDER","RIGHT_SHOULDER",
+    "LEFT_ELBOW","RIGHT_ELBOW",
+    "LEFT_WRIST","RIGHT_WRIST",
+    "LEFT_PINKY","RIGHT_PINKY",
+    "LEFT_INDEX","RIGHT_INDEX",
+    "LEFT_THUMB","RIGHT_THUMB",
+    "LEFT_HIP","RIGHT_HIP",
+    "LEFT_KNEE","RIGHT_KNEE",
+    "LEFT_ANKLE","RIGHT_ANKLE",
+    "LEFT_HEEL","RIGHT_HEEL",
+    "LEFT_FOOT_INDEX","RIGHT_FOOT_INDEX"
+]
+
+FACE_LANDMARK_NAMES = [f"FACE_{i}" for i in range(468)]
+
 #MediaPipe Classes
 mp_hands = mp.tasks.vision.HandLandmarksConnections #Joints and fingers
 mp_drawing = mp.tasks.vision.drawing_utils #Drawing on image
@@ -221,7 +242,7 @@ def get_video():
       
       #extract points to put in JSON
       json_output["frames"].append(
-        Extract_points(hand_detection_result, frame_idx, fps)
+        Extract_points(hand_detection_result, face_detection_result, pose_detection_result,frame_idx, fps)
       )
 
       #Increment frame
@@ -238,31 +259,31 @@ def get_video():
     videoRead.release()
     writer.release()
       
-def Extract_points(hand_detection_result, frame_idx, fps):
-  
-  #Json of frame index, when that frame is and which hand the points are coming from
+def Extract_points(hand_detection_result, face_detection_result, pose_detection_result, frame_idx, fps):
+
     frame_record = {
         "frame_index": frame_idx,
         "time_sec": frame_idx / fps,
-        "hands": []
+        "hands": [],
+        "face": [],
+        "pose": []
     }
-      
-    
-    hand_landmarks_list = hand_detection_result.hand_landmarks or [] # Does hands exist
-    handedness_list = hand_detection_result.handedness or [] # Does handidness exist
-    
-    
+
+    # ---------------- HANDS ----------------
+    hand_landmarks_list = hand_detection_result.hand_landmarks or []
+    handedness_list = hand_detection_result.handedness or []
+
     for h_i, hand_landmarks in enumerate(hand_landmarks_list):
-        # handedness for this hand 
+
         label = None
         score = None
-        if h_i < len(handedness_list) and handedness_list[h_i]:
-            
-            catagories = handedness_list[h_i][0]  #list of catagories
-            label = catagories.category_name #left/right
-            score = float(catagories.score) #Models confidence in choosing left/right hand correctly
 
-        points = [] #landmarks
+        if h_i < len(handedness_list) and handedness_list[h_i]:
+            category = handedness_list[h_i][0]
+            label = category.category_name
+            score = float(category.score)
+
+        points = []
         for lm_i, lm in enumerate(hand_landmarks):
             points.append({
                 "id": lm_i,
@@ -272,7 +293,6 @@ def Extract_points(hand_detection_result, frame_idx, fps):
                 "z": float(lm.z),
             })
 
-        # add hand to frame  
         frame_record["hands"].append({
             "hand_index": h_i,
             "handedness": label,
@@ -280,8 +300,46 @@ def Extract_points(hand_detection_result, frame_idx, fps):
             "landmarks": points
         })
 
-    return frame_record
+    # ---------------- FACE ----------------
+    face_landmarks_list = face_detection_result.face_landmarks or []
 
+    for face in face_landmarks_list:
+        face_points = []
+
+        for f_i, lm in enumerate(face):
+            face_points.append({
+                "id": f_i,
+                "name": f"FACE_{f_i}",
+                "x": float(lm.x),
+                "y": float(lm.y),
+                "z": float(lm.z),
+            })
+
+        frame_record["face"].append({
+            "landmarks": face_points
+        })
+
+    # ---------------- POSE ----------------
+    pose_landmarks_list = pose_detection_result.pose_landmarks or []
+
+    for pose in pose_landmarks_list:
+        pose_points = []
+
+        for p_i, lm in enumerate(pose):
+            pose_points.append({
+                "id": p_i,
+                "name": POSE_LANDMARK_NAMES[p_i],
+                "x": float(lm.x),
+                "y": float(lm.y),
+                "z": float(lm.z),
+                "visibility": float(lm.visibility) if hasattr(lm, "visibility") else None
+            })
+
+        frame_record["pose"].append({
+            "landmarks": pose_points
+        })
+
+    return frame_record
 """
   change structure 
   One function to loop videos + get specs
