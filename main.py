@@ -1,6 +1,3 @@
-def main():
-    print("Hello from project!")
-
-
-if __name__ == "__main__":
-    main()
+import torch
+print(torch.version.cuda)
+print(torch.cuda.is_available())
