@@ -3,10 +3,7 @@ from typing import Optional
 import cv2
 
 def crop_dgs_video(input_path: str, output_dir: str) -> Optional[str]:
-    """
-    Crop a stable region of a Dicta-Sign isolated-sign video so the full signer
-    (head, torso, both hands) is included. Replaces the old left-third crop.
-    """
+    
     if not os.path.isfile(input_path):
         print(f"[crop_dgs] Missing file: {input_path}")
         return None
@@ -21,11 +18,11 @@ def crop_dgs_video(input_path: str, output_dir: str) -> Optional[str]:
     height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
 
    
-    crop_w = int(width * 0.60)      # 60% of width
-    x_start = int(width * 0.20)     # start 20% from left
+    crop_w = int(width * 0.60)     
+    x_start = int(width * 0.20)    
     x_end = x_start + crop_w
 
-    # Clamp to frame
+ 
     x_start = max(0, x_start)
     x_end = min(width, x_end)
     crop_w = x_end - x_start

@@ -5,7 +5,7 @@ import os
 
 from extract_video import extract_video
 
-# These imports will work once you create ml_core.py
+
 from ml_core import (
     Seq2Seq,
     convert_frames_to_sequence,
@@ -18,10 +18,6 @@ from ml_core import (
     device,
 )
 
-
-# ---------------------------------------------------------
-# HYBRID SEGMENTATION
-# ---------------------------------------------------------
 
 def frame_velocity(seq):
     """Compute per-frame motion magnitude."""
@@ -41,7 +37,7 @@ def hybrid_segment(seq, vel_thresh=0.015, hand_thresh=0.02, min_gap=5):
     Combine velocity + handshape change to detect sign boundaries.
     """
     vel = frame_velocity(seq)
-    hand = handshape_change(seq, hand_indices=range(0, 21 * 3))  # left hand only
+    hand = handshape_change(seq, hand_indices=range(0, 21 * 3))  
 
     boundaries = [0]
 
@@ -54,9 +50,6 @@ def hybrid_segment(seq, vel_thresh=0.015, hand_thresh=0.02, min_gap=5):
     return [(boundaries[i], boundaries[i + 1]) for i in range(len(boundaries) - 1)]
 
 
-# ---------------------------------------------------------
-# LOAD TRAINED MODEL
-# ---------------------------------------------------------
 
 def load_trained_model():
     """
@@ -73,24 +66,11 @@ def load_trained_model():
     return model
 
 
-# ---------------------------------------------------------
-# FULL PIPELINE: VIDEO → JSON → SEQUENCE → SEGMENTS → HNS
-# ---------------------------------------------------------
+
 
 def annotate_video(video_path):
-    """
-    Full annotation pipeline:
-    1. Extract landmarks to JSON
-    2. Load JSON
-    3. Convert frames → landmark sequence
-    4. Segment sequence
-    5. Run model on each segment
-    6. Save results into Data/Processed/<video_name>/
-    """
+  
 
-    # -----------------------------------------------------
-    # Create output folder: Data/Processed/<video_name>/
-    # -----------------------------------------------------
     video_name = os.path.splitext(os.path.basename(video_path))[0]
     out_dir = os.path.join("Data", "Processed", video_name)
     os.makedirs(out_dir, exist_ok=True)
@@ -98,39 +78,24 @@ def annotate_video(video_path):
     landmarks_path = os.path.join(out_dir, "landmarks.json")
     annotations_path = os.path.join(out_dir, "annotations.json")
 
-    # -----------------------------------------------------
-    # 1. Extract landmarks → save to landmarks.json
-    # -----------------------------------------------------
+
     extract_video(video_path, landmarks_path, language="unknown")
 
-    # -----------------------------------------------------
-    # 2. Load landmark JSON
-    # -----------------------------------------------------
+
     with open(landmarks_path, "r", encoding="utf-8") as f:
         data = json.load(f)
 
     frames = data["frames"]
 
-    # -----------------------------------------------------
-    # 3. Convert frames → sequence
-    # -----------------------------------------------------
     seq = convert_frames_to_sequence(frames)
 
-    # -----------------------------------------------------
-    # 4. Segment
-    # -----------------------------------------------------
+
     segments = hybrid_segment(seq)
 
-    # -----------------------------------------------------
-    # 5. Load model
-    # -----------------------------------------------------
     model = load_trained_model()
 
     annotations = []
 
-    # -----------------------------------------------------
-    # 6. Annotate each segment
-    # -----------------------------------------------------
     for start, end in segments:
         seg = seq[start:end]
         seg_tensor = torch.tensor(seg, dtype=torch.float32).unsqueeze(0).to(device)
@@ -148,23 +113,19 @@ def annotate_video(video_path):
             "hamnosys": hamnosys
         })
 
-    # -----------------------------------------------------
-    # 7. Save annotations.json
-    # -----------------------------------------------------
+ 
     with open(annotations_path, "w", encoding="utf-8") as f:
         json.dump(annotations, f, ensure_ascii=False, indent=2)
 
     return annotations_path
 
 
-# ---------------------------------------------------------
-# CLI ENTRY POINT
-# ---------------------------------------------------------
+
 
 if __name__ == "__main__":
     import sys
 
-    # If user only gives filename, assume Data/Raw
+
     input_arg = sys.argv[1]
     if not os.path.isfile(input_arg):
         video_path = os.path.join("Data", "Raw", input_arg)
